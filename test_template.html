@@ -95,6 +95,142 @@
                     console.error("Test 6 Error:", e);
                 }
 
+                // --- New Theme Switching Tests ---
+                // Store original onload handler to reassign after persistence test
+                if (!window.originalTestFrameOnload) {
+                    window.originalTestFrameOnload = testFrame.onload;
+                }
+
+
+                const themeSwitcherBtn = iframeDoc.getElementById('themeSwitcherBtn');
+                const htmlElement = iframeDoc.documentElement;
+                const iframeWindow = testFrame.contentWindow;
+
+                // Test 7: Check for Theme Switcher Button
+                try {
+                    const test7Success = !!themeSwitcherBtn;
+                    logResult('Test 7: Theme Switcher Button present', test7Success);
+                } catch (e) {
+                    logResult('Test 7: Theme Switcher Button present', false);
+                    console.error("Test 7 Error:", e);
+                }
+
+                // Test 8: Test Theme Toggle
+                if (themeSwitcherBtn) {
+                    try {
+                        const initialTheme = String(htmlElement.getAttribute('data-bs-theme') || 'light'); // Default to light if null
+                        themeSwitcherBtn.click(); // Toggle 1
+                        const themeAfterFirstClick = String(htmlElement.getAttribute('data-bs-theme'));
+                        const firstToggleCorrect = themeAfterFirstClick !== initialTheme && (themeAfterFirstClick === 'dark' || themeAfterFirstClick === 'light');
+                        
+                        themeSwitcherBtn.click(); // Toggle 2
+                        const themeAfterSecondClick = String(htmlElement.getAttribute('data-bs-theme'));
+                        const secondToggleCorrect = themeAfterSecondClick === initialTheme;
+
+                        logResult('Test 8: Theme toggle changes data-bs-theme attribute correctly', firstToggleCorrect && secondToggleCorrect);
+                    } catch (e) {
+                        logResult('Test 8: Theme toggle changes data-bs-theme attribute correctly', false);
+                        console.error("Test 8 Error:", e);
+                    }
+                } else {
+                    logResult('Test 8: Theme toggle changes data-bs-theme attribute correctly (SKIPPED - button not found)', false);
+                }
+                
+                // Helper function to check if a color is "dark"
+                function isColorDark(colorString) {
+                    if (!colorString) return false;
+                    const rgbMatch = colorString.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+                    if (!rgbMatch) return false; 
+                    const r = parseInt(rgbMatch[1], 10);
+                    const g = parseInt(rgbMatch[2], 10);
+                    const b = parseInt(rgbMatch[3], 10);
+                    // Simple brightness formula (sum of RGB values)
+                    // Colors with sum less than 3 * 127.5 = 382.5 are considered dark
+                    return (r + g + b) < 382.5; 
+                }
+
+                // Test 9: Test Style Change (Basic)
+                // This test is asynchronous due to waiting for style computation
+                if (themeSwitcherBtn && iframeWindow) {
+                    (async () => {
+                        try {
+                            let currentThemeForTest9 = htmlElement.getAttribute('data-bs-theme') || 'light';
+                            if (currentThemeForTest9 === 'dark') {
+                                themeSwitcherBtn.click(); // Ensure it's light for consistent start
+                                await new Promise(resolve => setTimeout(resolve, 150)); // Wait for styles
+                            }
+                            const lightBg = iframeWindow.getComputedStyle(htmlElement).backgroundColor;
+                            
+                            themeSwitcherBtn.click(); // Toggle to dark
+                            await new Promise(resolve => setTimeout(resolve, 150)); 
+                            const darkBg = iframeWindow.getComputedStyle(htmlElement).backgroundColor;
+                            const isDarkBgCorrect = isColorDark(darkBg);
+
+                            themeSwitcherBtn.click(); // Toggle back to light
+                            await new Promise(resolve => setTimeout(resolve, 150)); 
+                            const lightAgainBg = iframeWindow.getComputedStyle(htmlElement).backgroundColor;
+                            const isLightAgainBgCorrect = !isColorDark(lightAgainBg) && lightAgainBg === lightBg;
+                            
+                            logResult('Test 9: Background style changes with theme toggle', isDarkBgCorrect && isLightAgainBgCorrect);
+                        } catch (e) {
+                            logResult('Test 9: Background style changes with theme toggle', false);
+                            console.error("Test 9 Error:", e);
+                        } finally {
+                            // Proceed to Test 10 logic, ensuring Test 9 completes first.
+                            runTest10();
+                        }
+                    })();
+                } else {
+                    logResult('Test 9: Background style changes with theme toggle (SKIPPED - button or iframe window not found)', false);
+                    runTest10(); // Still need to run test 10 if this one is skipped
+                }
+
+                function runTest10() {
+                    // Test 10: Local Storage Persistence
+                    const urlParams = new URLSearchParams(window.location.search);
+                    if (urlParams.has('testPersistenceActive')) {
+                        const expectedThemeOnReload = iframeWindow.localStorage.getItem('themeTestExpectedTheme'); // Check iframe's localStorage
+                        const actualThemeOnReload = htmlElement.getAttribute('data-bs-theme');
+                        logResult(`Test 10: Theme '${expectedThemeOnReload}' persists after reload`, actualThemeOnReload === expectedThemeOnReload);
+                        
+                        iframeWindow.localStorage.removeItem('themeTestExpectedTheme');
+                        urlParams.delete('testPersistenceActive');
+                        window.history.replaceState({}, document.title, `${window.location.pathname}${urlParams.toString() ? '?' + urlParams.toString() : ''}`);
+                        testFrame.onload = window.originalTestFrameOnload; // Restore original onload
+                        if (testFrame.contentWindow && testFrame.contentWindow.location) {
+                             // If testFrame's content also reloaded, re-attach its onload if necessary
+                             // This is tricky, originalTestFrameOnload is for the testFrame itself.
+                        }
+
+                    } else if (themeSwitcherBtn && iframeWindow) {
+                        logResult('Test 10: Theme persistence after reload (SETUP - will reload current page, not just iframe)', true);
+                        (async () => {
+                            const targetThemeForPersistence = 'dark';
+                            let currentThemeInIframe = htmlElement.getAttribute('data-bs-theme') || 'light';
+
+                            if (currentThemeInIframe !== targetThemeForPersistence) {
+                                themeSwitcherBtn.click(); 
+                                await new Promise(resolve => setTimeout(resolve, 150)); // Wait for script in iframe to save to its localStorage
+                            }
+                             // Second check in case it was already dark, then clicked to light, then needs to be dark
+                            currentThemeInIframe = htmlElement.getAttribute('data-bs-theme');
+                            if (currentThemeInIframe !== targetThemeForPersistence) {
+                                themeSwitcherBtn.click();
+                                await new Promise(resolve => setTimeout(resolve, 150));
+                                currentThemeInIframe = htmlElement.getAttribute('data-bs-theme');
+                            }
+
+                            iframeWindow.localStorage.setItem('themeTestExpectedTheme', currentThemeInIframe);
+                            
+                            testFrame.onload = null; // Prevent current onload from firing during page transition
+                            window.location.search = '?testPersistenceActive=true'; // Reload the parent page with query param
+                        })();
+                    } else {
+                         logResult('Test 10: Theme persistence after reload (SKIPPED - button not found or iframe issue)', false);
+                    }
+                }
+                // Note: Test 9 is async, so Test 10 is called from its 'finally' block or if Test 9 is skipped.
+
             } catch (e) {
                 const errorP = document.createElement('p');
                 errorP.textContent = 'FATAL ERROR: Could not access iframe content. Ensure index.html is served from the same origin if running locally.';

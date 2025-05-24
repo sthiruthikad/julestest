@@ -24,6 +24,9 @@
                     <li class="nav-item">
                         <a class="nav-link" href="#">Settings</a>
                     </li>
+                    <li class="nav-item">
+                        <button type="button" class="btn btn-outline-light ms-2" id="themeSwitcherBtn">Toggle Theme</button>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -136,5 +139,50 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js" integrity="sha384-j1CDi7MgGQ12Z7Qab0qlWQ/Qqz24Gc6BM0thvEMVjHnfYGF0rmFCozFSxQBxwHKO" crossorigin="anonymous"></script>
+    <script>
+        (() => {
+            'use strict';
+
+            const themeSwitcherBtn = document.getElementById('themeSwitcherBtn');
+            const htmlElement = document.documentElement;
+            const themePreferenceKey = 'theme';
+
+            // Function to apply the selected theme
+            const setTheme = (theme) => {
+                htmlElement.setAttribute('data-bs-theme', theme);
+                localStorage.setItem(themePreferenceKey, theme);
+            };
+
+            // Function to get the current theme (either from attribute or system preference)
+            const getCurrentTheme = () => {
+                let theme = htmlElement.getAttribute('data-bs-theme');
+                if (!theme) { // If no theme is set, use system preference or default to light
+                    theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+                }
+                return theme;
+            };
+            
+            // Get saved theme from local storage, or use current theme setting
+            let savedTheme = localStorage.getItem(themePreferenceKey) || getCurrentTheme();
+            
+            // Apply the saved or detected theme on initial load
+            setTheme(savedTheme);
+
+
+            if (themeSwitcherBtn) {
+                themeSwitcherBtn.addEventListener('click', () => {
+                    // Toggle theme
+                    const currentTheme = htmlElement.getAttribute('data-bs-theme');
+                    if (currentTheme === 'dark') {
+                        setTheme('light');
+                    } else {
+                        setTheme('dark');
+                    }
+                });
+            } else {
+                console.error("Theme switcher button with ID 'themeSwitcherBtn' not found.");
+            }
+        })();
+    </script>
 </body>
 </html>
